@@ -1,7 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CsvParser } from 'nest-csv-parser'
 const { Readable } = require('stream');
-import { HouseEntity, RelationEntity } from './entities/house.entity';
+import { HouseDto, RelationDto } from './dto/house.dto';
 
 @Injectable()
 export class AppService {
@@ -9,39 +9,48 @@ export class AppService {
     private csvParser: CsvParser
   ) { }
 
-  getHello(): string {
-    return 'Hello World!';
-  }
-
   async uniqueHouses(file: Express.Multer.File): Promise<number> {
-    const stream = Readable.from(file.buffer);
-    const data: { list: HouseEntity[] } = await this.csvParser.parse(stream, HouseEntity, null, null, { strict: true, separator: ',' })
-    const houses: HouseEntity[] = data.list;
-    let { idToAddresses, addressToIds } = this.initRelationObjects(houses)
+    try {
+      // Get list houses from file
+      const stream = Readable.from(file.buffer);
+      const data: { list: HouseDto[] } = await this.csvParser.parse(stream, HouseDto, null, null, { strict: true, separator: ',' })
+      const houses: HouseDto[] = data.list;
 
-    let result: number = 0;
-    Object.keys(idToAddresses).forEach((id: string) => {
-      if (idToAddresses[id].isChecked) {
-        return
-      }
-      result++
-      idToAddresses[id].isChecked = true
-      idToAddresses[id].links.forEach((link: string) => {
-        this.traverse(link, idToAddresses, addressToIds, false)
+      // Create 2 objects to map ids to addresses and vice versa
+      let { idToAddresses, addressToIds } = this.initRelationObjects(houses)
+
+      let result: number = 0;
+      // Traverse list houses using these above objects
+      Object.keys(idToAddresses).forEach((id: string) => {
+        // Ignore node that is already passed
+        if (idToAddresses[id].isChecked) {
+          return
+        }
+        result++
+        idToAddresses[id].isChecked = true
+        // Traverse all linked nodes
+        idToAddresses[id].links.forEach((link: string) => {
+          this.traverse(link, idToAddresses, addressToIds, false)
+        })
       })
-    })
 
-    return result
+      return result
+    } catch (error) {
+      throw error
+    }
   }
 
-  initRelationObjects(houses: HouseEntity[]): { idToAddresses: RelationEntity, addressToIds: RelationEntity } {
-    let idToAddresses: RelationEntity = {}
-    let addressToIds: RelationEntity = {}
+  initRelationObjects(houses: HouseDto[]): { idToAddresses: RelationDto, addressToIds: RelationDto } {
+    let idToAddresses: RelationDto = {}
+    let addressToIds: RelationDto = {}
 
-    houses.forEach((house: HouseEntity) => {
-      const { houseId, houseAddress }: HouseEntity = house;
-      this.linkProperties(houseId, houseAddress, idToAddresses)
-      this.linkProperties(houseAddress, houseId, addressToIds)
+    houses.forEach((house: HouseDto) => {
+      const { houseId, houseAddress }: HouseDto = house;
+      if (!houseId || !houseAddress) {
+        throw new BadRequestException('Wrong csv format')
+      }
+      this.linkProperties(houseId.trim(), houseAddress.trim(), idToAddresses)
+      this.linkProperties(houseAddress.trim(), houseId.trim(), addressToIds)
     });
 
     return {
@@ -50,7 +59,7 @@ export class AppService {
     }
   }
 
-  linkProperties(prop1: string, prop2: string, object: RelationEntity) {
+  linkProperties(prop1: string, prop2: string, object: RelationDto) {
     if (!object.hasOwnProperty(prop1)) {
       object[prop1] = {
         links: new Set([prop2]),
@@ -61,8 +70,8 @@ export class AppService {
     }
   }
 
-  traverse(node: string, idToAddresses: RelationEntity, addressToIds: RelationEntity, isIdObj: boolean) {
-    const obj: RelationEntity = isIdObj ? idToAddresses : addressToIds
+  traverse(node: string, idToAddresses: RelationDto, addressToIds: RelationDto, isIdObj: boolean) {
+    const obj: RelationDto = isIdObj ? idToAddresses : addressToIds
     if (obj[node].isChecked) {
       return
     }

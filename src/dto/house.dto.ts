@@ -1,9 +1,9 @@
-export class HouseEntity {
+export class HouseDto {
   houseId: string;
   houseAddress: string;
 }
 
-export class RelationEntity {
+export class RelationDto {
   [key: string]: {
     isChecked: boolean
     links: Set<string>

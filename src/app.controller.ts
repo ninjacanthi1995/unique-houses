@@ -7,14 +7,9 @@ import { FileInterceptor } from '@nestjs/platform-express';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
-  @Get()
-  getHello(): string {
-    return this.appService.getHello();
-  }
-
   @Get('houses')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(@UploadedFile() file: Express.Multer.File) {
+  async uniqueHouses(@UploadedFile() file: Express.Multer.File) {
     return await this.appService.uniqueHouses(file);
   }
 }
